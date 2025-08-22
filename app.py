@@ -687,7 +687,7 @@ def delete_produk_album_image(current_user, album_image_id):
 
     # Pastikan pengguna yang login adalah pemilik warung dari produk ini
     if album_image.produk.warung.pemilik_id != current_user.id:
-        return jsonify({'message': 'Unauthorized: You are not the owner of this product's album image'}), 403
+        return jsonify({"message": "Unauthorized: You are not the owner of this product's album image"}), 403
 
     # Hapus file fisik jika ada
     filename = os.path.basename(album_image.image_url)
