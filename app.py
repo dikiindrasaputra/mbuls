@@ -76,9 +76,23 @@ class Produk(db.Model):
     stok = db.Column(db.Integer, nullable=False)
     gambar_url = db.Column(db.String(200), nullable=True)
     warung_id = db.Column(db.Integer, db.ForeignKey('warung.id'), nullable=False, index=True) # Indeks di foreign key
+    
+    # Relasi ke ProdukAlbum
+    album_gambar = db.relationship('ProdukAlbum', backref='produk', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Produk {self.nama}>'
+
+# --- Model ProdukAlbum (untuk gambar tambahan produk) ---
+class ProdukAlbum(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    produk_id = db.Column(db.Integer, db.ForeignKey('produk.id'), nullable=False, index=True)
+    image_url = db.Column(db.String(200), nullable=False)
+    # Urutan gambar dalam album (opsional)
+    urutan = db.Column(db.Integer, default=0) 
+
+    def __repr__(self):
+        return f'<ProdukAlbum {self.image_url}>'
 
 # --- Model Keranjang (Shopping Cart) ---
 class Keranjang(db.Model):
@@ -596,6 +610,120 @@ def add_produk(current_user):
     }), 201
 
 # --- ENDPOINT PRODUK ---
+
+@app.route('/api/produk/<int:produk_id>/album', methods=['POST'])
+@token_required
+def upload_produk_album_image(current_user, produk_id):
+    """
+    Mengunggah gambar tambahan untuk album produk.
+    Maksimal 5 gambar per produk.
+    """
+    produk = Produk.query.get(produk_id)
+    if not produk:
+        return jsonify({'message': 'Produk not found'}), 404
+
+    if produk.warung.pemilik_id != current_user.id:
+        return jsonify({'message': 'Unauthorized: You are not the owner of this product'}), 403
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file part'}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'No selected image file'}), 400
+
+    # Periksa jumlah gambar yang sudah ada
+    existing_images_count = ProdukAlbum.query.filter_by(produk_id=produk_id).count()
+    if existing_images_count >= 5:
+        return jsonify({'message': 'Maximum 5 album images allowed per product'}), 400
+    
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = str(uuid.uuid4()) + file_extension
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+    
+    try:
+        file.save(filepath)
+    except Exception as e:
+        return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
+        
+    image_url = f"{request.scheme}://{request.host}/{app.config['UPLOAD_FOLDER']}/{unique_filename}"
+    
+    new_album_image = ProdukAlbum(produk_id=produk_id, image_url=image_url)
+    db.session.add(new_album_image)
+    db.session.commit()
+
+    return jsonify({'message': 'Album image uploaded successfully!', 'image_url': image_url, 'id': new_album_image.id}), 201
+
+@app.route('/api/produk/<int:produk_id>/album', methods=['GET'])
+def get_produk_album_images(produk_id):
+    """
+    Mengambil semua gambar album untuk produk tertentu.
+    """
+    produk = Produk.query.get(produk_id)
+    if not produk:
+        return jsonify({'message': 'Produk not found'}), 404
+
+    album_images = ProdukAlbum.query.filter_by(produk_id=produk_id).order_by(ProdukAlbum.urutan).all()
+    
+    images_list = []
+    for img in album_images:
+        images_list.append({
+            'id': img.id,
+            'image_url': img.image_url,
+            'urutan': img.urutan
+        })
+    
+    return jsonify(images_list), 200
+
+@app.route('/api/produk/album/<int:album_image_id>', methods=['DELETE'])
+@token_required
+def delete_produk_album_image(current_user, album_image_id):
+    """
+    Menghapus gambar album produk berdasarkan ID.
+    """
+    album_image = ProdukAlbum.query.get(album_image_id)
+    if not album_image:
+        return jsonify({'message': 'Album image not found'}), 404
+
+    # Pastikan pengguna yang login adalah pemilik warung dari produk ini
+    if album_image.produk.warung.pemilik_id != current_user.id:
+        return jsonify({'message': 'Unauthorized: You are not the owner of this product's album image'}), 403
+
+    # Hapus file fisik jika ada
+    filename = os.path.basename(album_image.image_url)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    db.session.delete(album_image)
+    db.session.commit()
+
+    return jsonify({'message': 'Album image deleted successfully'}), 200
+
+@app.route('/api/produk/<int:produk_id>', methods=['GET'])
+def get_produk_detail(produk_id):
+    """
+    Mengambil detail produk tunggal beserta gambar albumnya.
+    """
+    produk = Produk.query.get(produk_id)
+    if not produk:
+        return jsonify({'message': 'Produk not found'}), 404
+
+    album_images = ProdukAlbum.query.filter_by(produk_id=produk_id).order_by(ProdukAlbum.urutan).all()
+    album_list = [{'id': img.id, 'image_url': img.image_url, 'urutan': img.urutan} for img in album_images]
+
+    return jsonify({
+        'id': produk.id,
+        'nama': produk.nama,
+        'deskripsi': produk.deskripsi,
+        'harga': produk.harga,
+        'stok': produk.stok,
+        'gambar_url': produk.gambar_url,
+        'warung_id': produk.warung_id,
+        'album_gambar': album_list  # Tambahkan album gambar di sini
+    }), 200
+
+
 
 @app.route('/api/produk/<int:produk_id>', methods=['DELETE'])
 @token_required
