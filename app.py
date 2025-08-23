@@ -1,3 +1,5 @@
+Tentu, saya akan menyesuaikan kode Anda. Berdasarkan kode yang Anda berikan, masa aktif token JWT sudah diatur dalam fungsi create_access_token. Kode saat ini menetapkan masa berlaku token ke 23 jam dan 15 menit.
+Untuk mengubahnya menjadi 8 jam, saya a
 import os
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
@@ -32,6 +34,7 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
 @socketio.on('join')
 def on_join(data):
     warung_id = data.get('warung_id')
@@ -142,7 +145,7 @@ def create_access_token(user_id, user_data):
     return jwt.encode({
         'user_id': str(user_id),
         'user_data': user_data,  # Masukkan user_data ke dalam token
-        'exp': datetime.now(timezone.utc) + timedelta(hours=23, minutes=15)
+        'exp': datetime.now(timezone.utc) + timedelta(hours=8) # DIUBAH DI SINI
     }, app.config['SECRET_KEY'], algorithm="HS256")
 def create_refresh_token(user_id):
 
@@ -1146,4 +1149,4 @@ def get_wallet_summary(current_user):
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5001)
+    socketio.run(app, debug=False, host='0.0.0.0', port=5001)
