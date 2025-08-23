@@ -1,5 +1,3 @@
-Tentu, saya akan menyesuaikan kode Anda. Berdasarkan kode yang Anda berikan, masa aktif token JWT sudah diatur dalam fungsi create_access_token. Kode saat ini menetapkan masa berlaku token ke 23 jam dan 15 menit.
-Untuk mengubahnya menjadi 8 jam, saya a
 import os
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
